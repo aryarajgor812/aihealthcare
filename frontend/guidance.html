@@ -53,6 +53,17 @@
         .btn-github:hover {
             background-color: rgba(255, 255, 255, 0.2);
         }
+        .footer {
+            text-align: center;
+            padding: 20px;
+            margin-top: 40px;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        .footer a {
+            color: #4CAF50;
+            text-decoration: none;
+        }
         .hero-content {
             max-width: 800px;
             margin: 0 auto;
@@ -104,6 +115,12 @@
                     <li><a href="#">Guidance</a></li>
                     <li><a href="profile.html">My Profile</a></li>
                     <li><a href="https://github.com/princejoshi12/cancer-risk-calculator" class="btn-github">Github</a></li>
+                    <li>
+                        <select id="language-selector" onchange="changeLanguage()">
+                            <option value="en">English</option>
+                            <option value="gu">Gujarati</option>
+                        </select>
+                    </li>
                 </ul>
             </nav>
             <div class="hero-content">
@@ -125,54 +142,123 @@
         </div>
     </div>
 
+    <div class="footer">
+        <p>Made by <a href="https://aryarajgor.netlify.app/" target="_blank">Arya</a></p>
+    </div>
+
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/showdown/dist/showdown.min.js"></script>
     <script>
-        $(document).ready(function () {
-            const personalizedGuidance = sessionStorage.getItem('personalized_guidance');
-    
-            if (personalizedGuidance) {
-                $('#guidance-container').html(personalizedGuidance);
-            } else {
-                const riskAssessment = JSON.parse(sessionStorage.getItem('risk_assessment'));
-                const userAnswers = JSON.parse(sessionStorage.getItem('user_answers'));
-    
-                if (!riskAssessment || !userAnswers) {
-                    $('#guidance-container').html('<p>Sorry, no information available. Please complete the questionnaire first.</p>');
-                    return;
-                }
-    
-                showLoading();
-                fetch('http://127.0.0.1:5000/personalized-guidance', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ cancer_risk: riskAssessment, user_answers: userAnswers })
+        // WARNING: It is not recommended to store API keys in client-side code.
+        // This is done for demonstration purposes only.
+        const API_KEY = 'AIzaSyDQiyvx6SaLHzHYB0Bupz6SpJk4Dxgc-1I';
+        const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${API_KEY}`;
+        let selectedLanguage = localStorage.getItem('language') || 'en';
+
+        function changeLanguage() {
+            selectedLanguage = $('#language-selector').val();
+            localStorage.setItem('language', selectedLanguage);
+            location.reload();
+        }
+
+        function getPersonalizedGuidance() {
+            const riskAssessment = localStorage.getItem('risk_assessment');
+            const userAnswers = localStorage.getItem('user_answers');
+
+            if (!riskAssessment || !userAnswers) {
+                $('#guidance-container').html('<p>Sorry, no information available. Please complete the questionnaire first.</p>');
+                return;
+            }
+
+            showLoading();
+
+            let prompt = `You are an AI that provides highly personalized health advice to reduce cancer risk.
+Based on the user's specific cancer risk assessment, their detailed answers, and the identified risk factors,
+create a comprehensive and actionable health plan that is truly personalized.
+For low-risk users, suggest activities that maintain or improve their good habits, and provide encouragement.
+For moderate-risk users, suggest actionable changes in diet, lifestyle, and screenings, with a focus on preventing escalation.
+For high-risk users, give detailed, specific advice tailored to their unique situation. This includes targeted lifestyle changes, precise dietary advice,
+and urgent recommendations for further screenings or consultations. Acknowledge positive actions they are already taking.
+Avoid general suggestions; instead, focus on practical steps they can directly implement. Be supportive and avoid creating undue fear, but be clear about the importance of the advice.
+Use simple and easy words that can be understood by a 10-year-old child. Minimize grammatical mistakes. Make sure the guidance is clear, actionable, and highly personalized.
+If the user has a high-risk chance, give them deeper and better guidance to improve their health.
+Generate the response in English.
+Start the response with the cancer risk stage and percentage.
+Cancer Risk: ${riskAssessment}
+User Answers: ${userAnswers}`;
+
+            if (selectedLanguage === 'gu') {
+                prompt += "\n\nTranslate the guidance to Gujarati.";
+            }
+
+            fetch(GEMINI_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ "contents": [{ "parts": [{ "text": prompt }] }] })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    const guidance = data.candidates[0].content.parts[0].text;
+                    const converter = new showdown.Converter();
+                    const htmlContent = converter.makeHtml(guidance);
+                    $('#guidance-container').html(htmlContent);
+
+                    localStorage.setItem('personalized_guidance', guidance);
+
+                    hideLoading();
                 })
-                    .then(response => response.json())
-                    .then(data => {
-                        const converter = new showdown.Converter();
-                        const htmlContent = converter.makeHtml(data.guidance);
-                        $('#guidance-container').html(htmlContent);
-    
-                        sessionStorage.setItem('personalized_guidance', htmlContent);
-    
-                        hideLoading();
+                .catch(error => {
+                    console.error('Error:', error);
+                    hideLoading();
+                    alert('Error loading guide. Please try again.');
+                });
+        }
+
+        function translateStaticText() {
+            if (selectedLanguage === 'gu') {
+                const elementsToTranslate = $('h1, p, a.btn-github, a[href="index.html"], a[href="questions.html"], a[href="guidance.html"], a[href="profile.html"]');
+                elementsToTranslate.each(function () {
+                    const element = $(this);
+                    const text = element.text();
+                    const prompt = `Translate the following text to Gujarati: ${text}`;
+                    fetch(GEMINI_API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ "contents": [{ "parts": [{ "text": prompt }] }] })
                     })
-                    .catch(error => {
-                        console.error('Error:', error);
-                        hideLoading();
-                        alert('Error loading guide. Please try again.');
-                    });
+                        .then(response => response.json())
+                        .then(data => {
+                            const translatedText = data.candidates[0].content.parts[0].text;
+                            element.text(translatedText);
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                        });
+                });
+            }
+        }
+
+        $(document).ready(function () {
+            $('#language-selector').val(selectedLanguage);
+            translateStaticText();
+            const personalizedGuidance = localStorage.getItem('personalized_guidance');
+
+            if (personalizedGuidance) {
+                const converter = new showdown.Converter();
+                const htmlContent = converter.makeHtml(personalizedGuidance);
+                $('#guidance-container').html(htmlContent);
+            } else {
+                getPersonalizedGuidance();
             }
         });
-    
+
         function showLoading() {
             $('.loading').fadeIn(300);
         }
-    
+
         function hideLoading() {
             $('.loading').fadeOut(300);
         }
-    </script>    
+    </script>
 </body>
 </html>

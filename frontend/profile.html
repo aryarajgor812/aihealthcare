@@ -82,6 +82,18 @@
             background-color: rgba(255, 255, 255, 0.2);
         }
 
+        .footer {
+            text-align: center;
+            padding: 20px;
+            margin-top: 40px;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        .footer a {
+            color: #4CAF50;
+            text-decoration: none;
+        }
+
         .hero-content {
             max-width: 800px;
             margin: 0 auto;
@@ -152,6 +164,12 @@
                     <li><a href="guidance.html">Guidance</a></li>
                     <li><a href="#">My Profile</a></li>
                     <li><a href="https://github.com/princejoshi12/cancer-risk-calculator" class="btn-github">Github</a></li>
+                    <li>
+                        <select id="language-selector" onchange="changeLanguage()">
+                            <option value="en">English</option>
+                            <option value="gu">Gujarati</option>
+                        </select>
+                    </li>
                 </ul>
             </nav>
             <div class="hero-content">
@@ -171,12 +189,55 @@
         <button id="logout-btn" class="btn-logout">Logout</button>
     </div>
 
+    <div class="footer">
+        <p>Made by <a href="https://aryarajgor.netlify.app/" target="_blank">Arya</a></p>
+    </div>
+
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/showdown/dist/showdown.min.js"></script>
     <script>
+        // WARNING: It is not recommended to store API keys in client-side code.
+        // This is done for demonstration purposes only.
+        const API_KEY = 'AIzaSyDQiyvx6SaLHzHYB0Bupz6SpJk4Dxgc-1I';
+        const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${API_KEY}`;
+        let selectedLanguage = localStorage.getItem('language') || 'en';
+
+        function changeLanguage() {
+            selectedLanguage = $('#language-selector').val();
+            localStorage.setItem('language', selectedLanguage);
+            location.reload();
+        }
+
+        function translateStaticText() {
+            if (selectedLanguage === 'gu') {
+                const elementsToTranslate = $('h1, h2, p, button, a.btn-github, a[href="index.html"], a[href="questions.html"], a[href="guidance.html"], a[href="profile.html"]');
+                elementsToTranslate.each(function () {
+                    const element = $(this);
+                    const text = element.text();
+                    const prompt = `Translate the following text to Gujarati: ${text}`;
+                    fetch(GEMINI_API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ "contents": [{ "parts": [{ "text": prompt }] }] })
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            const translatedText = data.candidates[0].content.parts[0].text;
+                            element.text(translatedText);
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                        });
+                });
+            }
+        }
+
         $(document).ready(function () {
-            const userSummary = sessionStorage.getItem('user_summary');
-            const personalizedGuidance = sessionStorage.getItem('personalized_guidance');
+            $('#language-selector').val(selectedLanguage);
+            translateStaticText();
+
+            const userSummary = localStorage.getItem('user_summary');
+            const personalizedGuidance = localStorage.getItem('personalized_guidance');
 
             const converter = new showdown.Converter();
 
@@ -194,11 +255,10 @@
                 $('#personalized-guidance').text('Sorry, personalized guidance is not available.');
             }
         });
-    </script>
-    <script>
+
         $(document).ready(function () {
             $('#logout-btn').click(function () {
-                sessionStorage.clear();
+                localStorage.clear();
                 window.location.href = 'index.html';
             });
         });

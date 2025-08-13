@@ -65,6 +65,18 @@
             background-color: rgba(255, 255, 255, 0.2);
         }
 
+        .footer {
+            text-align: center;
+            padding: 20px;
+            margin-top: 40px;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+        .footer a {
+            color: #4CAF50;
+            text-decoration: none;
+        }
+
         .hero-content {
             max-width: 100%;
             margin: 0 auto;
@@ -204,6 +216,12 @@
                     <li><a href="profile.html">My Profile</a></li>
                     <li><a href="https://github.com/princejoshi12/cancer-risk-calculator" class="btn-github">Github</a>
                     </li>
+                    <li>
+                        <select id="language-selector" onchange="changeLanguage()">
+                            <option value="en">English</option>
+                            <option value="gu">Gujarati</option>
+                        </select>
+                    </li>
                 </ul>
             </nav>
             <div class="hero-content">
@@ -227,18 +245,54 @@
         </div>
     </div>
 
+    <div class="footer">
+        <p>Made by <a href="https://aryarajgor.netlify.app/" target="_blank">Arya</a></p>
+    </div>
+
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
+        // WARNING: It is not recommended to store API keys in client-side code.
+        // This is done for demonstration purposes only.
+        const API_KEY = 'AIzaSyDQiyvx6SaLHzHYB0Bupz6SpJk4Dxgc-1I';
+        const GEMINI_API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent?key=${API_KEY}`;
+
         let questionIndex = 0;
         let questions = [];
         let answers = [];
+        let selectedLanguage = localStorage.getItem('language') || 'en';
 
-        $(document).ready(function () {
+        function changeLanguage() {
+            selectedLanguage = $('#language-selector').val();
+            localStorage.setItem('language', selectedLanguage);
+            location.reload();
+        }
+
+        function generateQuestions() {
             showLoading();
-            fetch('http://127.0.0.1:5000/generate-questions', { method: 'POST' })
+            let prompt = "You are an AI specialized in asking health-related questions to assess cancer risk. Your task is to create a series of personalized and easy-to-understand questions to learn about the user's habits, lifestyle, medical history, and environmental exposures. Think of these questions as something a friendly and empathetic doctor would ask. Make sure the questions are straightforward and personalized. Use simple and easy words that can be understood by a 10-year-old child. Minimize grammatical mistakes. Make sure the questions are detailed and clear. The questions should be divided into four stages: 1. **Basic Information:** Gather essential details like age, gender, location, and race/ethnicity, with options where appropriate. 2. **Health Habits:** Explore critical health behaviors, including smoking, alcohol consumption, diet, physical activity, and sleep patterns. 3. **Specific Risks:** Ask about family medical history, previous diagnoses, exposure to harmful substances (e.g., radiation, carcinogens), stress levels, and any chronic conditions. 4. **Screening and Diagnostic Tests:** Inquire about results from previous cancer screenings, findings from imaging tests (e.g., mammograms, colonoscopies), and relevant biomarker levels. Provide options only where it makes sense (like for age, gender, etc.), and use open-ended questions for more detailed responses (like lifestyle or medical history). Also, ask for the user's name to personalize the interaction. Format the response in JSON without markdown. Structure it like this: {questions: [{question: \"What is your age?\", \"type\": \"open-ended\"}, {question: \"What is your gender?\", options: [\"Male\", \"Female\", \"Other\"], \"type\": \"single-choice\"}]}";
+
+            if (selectedLanguage === 'gu') {
+                prompt += "\n\nTranslate the questions and options to Gujarati.";
+            }
+
+            fetch(GEMINI_API_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    "contents": [{
+                        "parts": [{
+                            "text": prompt
+                        }]
+                    }]
+                })
+            })
                 .then(response => response.json())
                 .then(data => {
-                    questions = data.questions;
+                    const responseText = data.candidates[0].content.parts[0].text;
+                    const cleanedJsonString = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+                    questions = JSON.parse(cleanedJsonString).questions;
                     showQuestion();
                     hideLoading();
                 })
@@ -247,6 +301,11 @@
                     hideLoading();
                     alert('An error occurred while loading questions. Please try again.');
                 });
+        }
+
+        $(document).ready(function () {
+            $('#language-selector').val(selectedLanguage);
+            generateQuestions();
         });
 
         function showQuestion() {
@@ -271,7 +330,7 @@
                     questionHtml += `<input type="text" id="answer" class="form-control">`;
                 }
 
-                questionHtml += `<button class="btn-custom mt-3" onclick="submitAnswer()">આગળ</button>`;
+                questionHtml += `<button class="btn-custom mt-3" onclick="submitAnswer()">Next</button>`;
                 $('#question-container').html(questionHtml);
             } else {
                 callApisAndProceed();
@@ -309,25 +368,51 @@
         function callApisAndProceed() {
             showLoading();
 
-            fetch('http://127.0.0.1:5000/summarize-text', {
+            let summarizePrompt = `You are an AI specialized in summarizing user-provided health information to generate a concise, easy-to-understand summary.
+Based on the user's responses to health-related questions, create a short summary that highlights the most important details about their habits, lifestyle, medical history, and cancer risk factors.
+The summary should be informative but concise, covering key aspects such as age, gender, health habits, specific risks, and any previous screenings or diagnostic test results.
+Use simple and easy words that can be understood by a 10-year-old child. Minimize grammatical mistakes. Make sure the summary is clear and accurate.
+Generate the response in English. User Answers: ${JSON.stringify(answers)}`;
+
+            if (selectedLanguage === 'gu') {
+                summarizePrompt += "\n\nTranslate the summary to Gujarati.";
+            }
+
+            fetch(GEMINI_API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ user_answers: answers })
+                body: JSON.stringify({ "contents": [{ "parts": [{ "text": summarizePrompt }] }] })
             })
                 .then(response => response.json())
                 .then(data => {
-                    sessionStorage.setItem('user_summary', data.summary);
+                    const summary = data.candidates[0].content.parts[0].text;
+                    localStorage.setItem('user_summary', summary);
 
-                    return fetch('http://127.0.0.1:5000/calculate-risk', {
+                    let riskPrompt = `You are an AI specialized in accurately assessing cancer risk based on a wide range of detailed user responses.
+Your role is to carefully analyze the user's answers concerning their habits, lifestyle, medical history, environmental exposures, and diagnostic test results.
+Consider genetic factors, lifestyle choices, demographic characteristics, environmental exposures, and results from screenings or diagnostic tests.
+Provide a nuanced risk level (very low, low, moderate, high, very high) with a precise percentage, ranging from 1% to 100%.
+The risk level and percentage should accurately reflect the user's responses, with each factor carefully weighed.
+If the risk is high or very high, give special attention to the seriousness of the situation but do so in a balanced and supportive manner.
+Use simple and easy words that can be understood by a 10-year-old child. Minimize grammatical mistakes. Make sure the explanation is detailed, accurate, and clear.
+Generate the response in English.
+Begin the response with the cancer risk level and percentage. User Answers: ${JSON.stringify(answers)}`;
+
+                    if (selectedLanguage === 'gu') {
+                        riskPrompt += "\n\nTranslate the risk assessment to Gujarati.";
+                    }
+
+                    return fetch(GEMINI_API_URL, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ user_answers: answers })
+                        body: JSON.stringify({ "contents": [{ "parts": [{ "text": riskPrompt }] }] })
                     });
                 })
                 .then(response => response.json())
                 .then(data => {
-                    sessionStorage.setItem('risk_assessment', JSON.stringify(data.risk_assessment));
-                    sessionStorage.setItem('user_answers', JSON.stringify(answers));
+                    const riskAssessment = data.candidates[0].content.parts[0].text;
+                    localStorage.setItem('risk_assessment', riskAssessment);
+                    localStorage.setItem('user_answers', JSON.stringify(answers));
                     hideLoading();
                     window.location.href = 'guidance.html';
                 })
